@@ -25,7 +25,7 @@ program
                 object.data.forEach((datum) => {
                     console.log(
                         `${datum.mode.toString().padStart(6, "0")} ${
-                            datum.mode === 40000 ? "tree" : "blob"
+                            datum.type
                         } ${datum.hash}\t${datum.path}`
                     );
                 });

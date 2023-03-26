@@ -4,6 +4,13 @@ import { GitDirectory } from "./GitDirectory";
 import { HashUtil } from "./Hash.util";
 import { StringUtil } from "./String.util";
 
+type TreeData = {
+    mode: number;
+    hash: string;
+    path: string;
+    type: "tree" | "blob" | "commit";
+};
+
 export type GitObjectData =
     | {
           type: "blob" | "commit";
@@ -13,11 +20,7 @@ export type GitObjectData =
       }
     | {
           type: "tree";
-          data: {
-              mode: number;
-              hash: string;
-              path: string;
-          }[];
+          data: TreeData[];
           hash: string;
           size: number;
       };
@@ -50,23 +53,51 @@ export class GitObject {
             const splits = StringUtil.splitStringAtPositions(
                 data,
                 nullPositions.map((pos) => pos + 21)
-            );
+            ).filter((f) => f.length > 2);
+
+            const buffer = decompressed.subarray(decompressed.indexOf("\0"));
+            let currentPosition: number = 0;
+            const parsedResults: TreeData[] = [];
+            while (currentPosition < buffer.length) {
+                const firstSpace = buffer.indexOf(" ", currentPosition);
+                const firstNull = buffer.indexOf("\0", firstSpace);
+
+                if (firstSpace === -1 || firstNull === -1) {
+                    throw new Error("Malformed tree object");
+                }
+
+                const modeStr = buffer
+                    .subarray(currentPosition, firstSpace)
+                    .toString("utf-8")
+                    .trim();
+                const pathStr = buffer
+                    .subarray(firstSpace + 1, firstNull)
+                    .toString("utf-8")
+                    .trim();
+                const hash = buffer
+                    .subarray(firstNull + 1, firstNull + 21)
+                    .toString("hex");
+
+                parsedResults.push({
+                    hash,
+                    mode: parseInt(modeStr, 10),
+                    path: pathStr,
+                    type:
+                        modeStr === "160000"
+                            ? "commit"
+                            : modeStr === "040000"
+                            ? "tree"
+                            : "blob",
+                });
+
+                currentPosition = firstNull + 21;
+            }
 
             return {
                 type,
                 hash: HashUtil.getHash(decompressed),
                 size: contentSize,
-                data: splits.map((datum) => {
-                    const [leftHalf, shaHash] = datum.split("\0");
-                    const [mode, ...pathParts] = leftHalf.split(" ");
-                    const pathString = pathParts.join(" ");
-
-                    return {
-                        mode: parseInt(mode, 10),
-                        path: pathString,
-                        hash: Buffer.from(shaHash, "binary").toString("hex"),
-                    };
-                }),
+                data: parsedResults,
             };
         }
 

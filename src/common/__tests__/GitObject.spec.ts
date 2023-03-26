@@ -34,14 +34,16 @@ describe("GitObject", () => {
                 {
                   "data": [
                     {
-                      "hash": "457bfd76427c4afdfdfd70fd237469fdfd4e53fd",
-                      "mode": 40000,
+                      "hash": "457bfe76427c4acceacf70812374699f864e5389",
+                      "mode": NaN,
                       "path": "common",
+                      "type": "blob",
                     },
                     {
-                      "hash": "fd7546fd04fd5a68fdfd04fd7efdfdfd3d0cfd04",
+                      "hash": "db7546d704e55a688aa604da7e9cdfc63d0cc404",
                       "mode": 100644,
                       "path": "index.ts",
+                      "type": "blob",
                     },
                   ],
                   "hash": "9b2d795ef61117b4763778378c46d00961198250",
