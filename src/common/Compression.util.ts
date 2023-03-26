@@ -1,7 +1,6 @@
-import zlib from 'zlib';
+import zlib from "zlib";
 
 export class CompressionUtil {
-
     static async compress(str: string | Buffer): Promise<Buffer> {
         return new Promise((res, rej) => {
             zlib.deflate(str, (err, result) => {
@@ -12,7 +11,7 @@ export class CompressionUtil {
 
                 res(result);
             });
-        })
+        });
     }
 
     static async decompress(str: string | Buffer): Promise<Buffer> {
@@ -22,10 +21,9 @@ export class CompressionUtil {
                     rej(err);
                     return;
                 }
-                
+
                 res(result);
             });
-        })
+        });
     }
-
 }

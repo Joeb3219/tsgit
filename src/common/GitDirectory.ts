@@ -11,6 +11,6 @@ export class GitDirectory {
         const remainingHash = hash.slice(2);
 
         const rootDirectory = await this.getGitDirectoryRoot();
-        return path.join(rootDirectory, 'objects', hashFolder, remainingHash);
+        return path.join(rootDirectory, "objects", hashFolder, remainingHash);
     }
 }

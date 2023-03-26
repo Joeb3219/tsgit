@@ -1,18 +1,18 @@
-import { program } from 'commander';
-import { GitObject } from './common/GitObject';
+import { program } from "commander";
+import { GitObject } from "./common/GitObject";
 
 program
-    .command('cat-file')
-    .option('-t', 'show object type')
-    .option('-s', `show object size`)
-    .option('-e', `exit with zero when there's no error`)
-    .option('-p', `pretty-print object's content`)
-    .argument('<object>')
+    .command("cat-file")
+    .option("-t", "show object type")
+    .option("-s", `show object size`)
+    .option("-e", `exit with zero when there's no error`)
+    .option("-p", `pretty-print object's content`)
+    .argument("<object>")
     .action(async (hash, flags) => {
         const object = await GitObject.readObjectFromDisk(hash);
 
         if (!flags.t && !flags.p && !flags.s && !flags.e) {
-            throw new Error('Please specify output mode')
+            throw new Error("Please specify output mode");
         }
 
         if (flags.t) {
@@ -21,7 +21,17 @@ program
         }
 
         if (flags.p) {
-            console.log(object.data);
+            if (object.type === "tree") {
+                object.data.forEach((datum) => {
+                    console.log(
+                        `${datum.mode.toString().padStart(6, "0")} ${
+                            datum.mode === 40000 ? "tree" : "blob"
+                        } ${datum.hash}\t${datum.path}`
+                    );
+                });
+            } else {
+                console.log(object.data);
+            }
             return;
         }
 
@@ -33,7 +43,6 @@ program
         if (flags.e) {
             return;
         }
-
-    })
+    });
 
 program.parse();
