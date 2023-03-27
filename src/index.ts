@@ -45,4 +45,17 @@ program
         }
     });
 
+program
+    .command("hash-object")
+    .option("-w", "Actually write the object into the object database.")
+    .argument("<path>")
+    .action(async (path, flags) => {
+        const object = await GitObject.createObjectFromDisk(path);
+        console.log(object.hash);
+
+        if (flags.w) {
+            await GitObject.writeObject(object);
+        }
+    });
+
 program.parse();

@@ -1,4 +1,5 @@
 import fs from "fs-extra";
+import path from "path";
 import { CompressionUtil } from "./Compression.util";
 import { GitDirectory } from "./GitDirectory";
 import { HashUtil } from "./Hash.util";
@@ -154,5 +155,55 @@ export class GitObject {
         }
 
         return object;
+    }
+
+    static getObjectPayload(object: GitObjectData): string | Buffer {
+        const header = `${object.type} ${object.size}\0`;
+        if (object.type === "tree") {
+            const treeData = Buffer.alloc(object.size);
+            treeData.write(header, 0);
+
+            let currentPosition: number = header.length;
+            for (const datum of object.data) {
+                const modeAndPath = `${datum.mode} ${datum.path}\0`;
+                treeData.write(modeAndPath, currentPosition);
+                currentPosition += modeAndPath.length;
+
+                const hashBuffer = Buffer.from(datum.hash, "hex");
+                hashBuffer.copy(treeData, currentPosition);
+
+                currentPosition += hashBuffer.length;
+            }
+
+            return treeData;
+        }
+
+        return `${header}${object.data}`;
+    }
+
+    static async createObjectFromDisk(path: string): Promise<GitObjectData> {
+        const file = await fs.readFile(path);
+        const data = file.toString();
+
+        const fullObject = `blob ${data.length}\0${data}`;
+
+        return {
+            data,
+            size: data.length,
+            type: "blob",
+            hash: HashUtil.getHash(fullObject),
+        };
+    }
+
+    static async writeObject(object: GitObjectData) {
+        const objectPath = await GitDirectory.getObjectPath(object.hash);
+
+        const directory = path.dirname(objectPath);
+        await fs.mkdirp(directory);
+
+        const payload = this.getObjectPayload(object);
+        const compressedPayload = await CompressionUtil.compress(payload);
+
+        return fs.writeFile(objectPath, compressedPayload);
     }
 }
