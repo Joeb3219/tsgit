@@ -55,7 +55,9 @@ export class GitObject {
                 nullPositions.map((pos) => pos + 21)
             ).filter((f) => f.length > 2);
 
-            const buffer = decompressed.subarray(decompressed.indexOf("\0") + 1);
+            const buffer = decompressed.subarray(
+                decompressed.indexOf("\0") + 1
+            );
             let currentPosition: number = 0;
             const parsedResults: TreeData[] = [];
             while (currentPosition < buffer.length) {
