@@ -35,7 +35,7 @@ describe("GitObject", () => {
                   "data": [
                     {
                       "hash": "457bfe76427c4acceacf70812374699f864e5389",
-                      "mode": NaN,
+                      "mode": 40000,
                       "path": "common",
                       "type": "blob",
                     },

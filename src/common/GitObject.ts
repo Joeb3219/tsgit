@@ -55,7 +55,7 @@ export class GitObject {
                 nullPositions.map((pos) => pos + 21)
             ).filter((f) => f.length > 2);
 
-            const buffer = decompressed.subarray(decompressed.indexOf("\0"));
+            const buffer = decompressed.subarray(decompressed.indexOf("\0") + 1);
             let currentPosition: number = 0;
             const parsedResults: TreeData[] = [];
             while (currentPosition < buffer.length) {
@@ -70,17 +70,19 @@ export class GitObject {
                     .subarray(currentPosition, firstSpace)
                     .toString("utf-8")
                     .trim();
+
                 const pathStr = buffer
                     .subarray(firstSpace + 1, firstNull)
                     .toString("utf-8")
                     .trim();
+
                 const hash = buffer
                     .subarray(firstNull + 1, firstNull + 21)
                     .toString("hex");
 
                 parsedResults.push({
                     hash,
-                    mode: parseInt(modeStr, 10),
+                    mode: this.parseModeString(modeStr),
                     path: pathStr,
                     type:
                         modeStr === "160000"
@@ -107,6 +109,35 @@ export class GitObject {
             hash: HashUtil.getHash(decompressed),
             size: contentSize,
         };
+    }
+
+    static parseModeString(str: string): number {
+        // Directory/Tree
+        if (str.match(/^0?4.*/)) {
+            return 40000;
+        }
+
+        // Non-executable file
+        if (str.match(/^1006.*/)) {
+            return 100644;
+        }
+
+        // Executable file
+        if (str.match(/^1007.*/)) {
+            return 100755;
+        }
+
+        // Symlink
+        if (str.match(/^120.*/)) {
+            return 120000;
+        }
+
+        // Commit
+        if (str.match(/^160.*/)) {
+            return 160000;
+        }
+
+        throw new Error(`Unknown mode string ${str}`);
     }
 
     static async readObjectFromDisk(hash: string): Promise<GitObjectData> {
