@@ -22,4 +22,16 @@ export class GitDirectory {
         const rootDirectory = await this.getGitDirectoryRoot();
         return path.join(rootDirectory, "objects", hashFolder, remainingHash);
     }
+
+    static async getRefPath(ref: string): Promise<string> {
+        const rootDirectory = await this.getGitDirectoryRoot();
+
+        return path.join(rootDirectory, ref);
+    }
+
+    static async getHeadPath(): Promise<string> {
+        const rootDirectory = await this.getGitDirectoryRoot();
+
+        return `${rootDirectory}/HEAD`;
+    }
 }

@@ -1,5 +1,6 @@
 import { program } from "commander";
 import { GitObject } from "./common/GitObject";
+import { GitRef } from "./common/GitRef";
 
 program
     .command("cat-file")
@@ -56,6 +57,42 @@ program
         if (flags.w) {
             await GitObject.writeObject(object);
         }
+    });
+
+program
+    .command("update-ref")
+    .option("-d", "delete the reference")
+    .argument("<refname>")
+    .argument("[newvalue]")
+    .action(async (refName, newValue, flags) => {
+        if (!flags.d && !newValue) {
+            throw new Error("Missing ref value");
+        }
+
+        if (flags.d) {
+            await GitRef.deleteRef(refName);
+            return;
+        }
+
+        await GitRef.updateRef(refName, newValue);
+    });
+
+program
+    .command("branch")
+    .argument("<branchname>")
+    .action(async (branchName, flags) => {
+        const refPath = `refs/heads/${branchName}`;
+        const currentRef = await GitRef.getCurrentRef();
+        const currentRefValue = await GitRef.getRef(currentRef);
+        await GitRef.updateRef(refPath, currentRefValue);
+    });
+
+program
+    .command("checkout")
+    .argument("<branchname>")
+    .action(async (branchName, flags) => {
+        const refPath = `refs/heads/${branchName}`;
+        await GitRef.updateCurrentRef(refPath);
     });
 
 program.parse();
