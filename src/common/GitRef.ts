@@ -24,8 +24,16 @@ export class GitRef {
         return result;
     }
 
+    static isRefsStyle(str: string): boolean {
+        return str.startsWith('refs/heads/');
+    }
+
     static async updateCurrentRef(newRef: string) {
         const headPath = await GitDirectory.getHeadPath();
+
+        if (!this.isRefsStyle(newRef)) {
+            throw new Error('Provided ref does not follow format of /refs/heads/ref-name');
+        }
 
         return fs.writeFile(headPath, `ref: ${newRef}`, { encoding: "utf-8" });
     }

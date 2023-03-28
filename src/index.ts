@@ -88,6 +88,22 @@ program
     });
 
 program
+    .command("symbolic-ref")
+    .argument("<symbolic-ref-name>")
+    .argument("[new-ref-name]")
+    .action(async (symbolicRefName, newRefName) => {
+        if (symbolicRefName !== 'HEAD') {
+            throw new Error(`Unimplemented symbolic-ref-name ${symbolicRefName}`)
+        }
+
+        if (newRefName) {
+            await GitRef.updateCurrentRef(newRefName);
+        }
+
+        console.log(await GitRef.getCurrentRef())
+    });
+
+program
     .command("checkout")
     .argument("<branchname>")
     .action(async (branchName, flags) => {
