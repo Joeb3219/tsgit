@@ -5,6 +5,11 @@ import { GitDirectory } from "./GitDirectory";
 export class GitRef {
     static async updateRef(refName: string, refValue: string) {
         const refPath = await GitDirectory.getRefPath(refName);
+
+        if (!this.isRefsStyle(refName)) {
+            throw new Error('Provided name is not a valid ref name')
+        }
+
         const baseDirectory = path.dirname(refPath);
 
         await fs.mkdirp(baseDirectory);
@@ -25,14 +30,14 @@ export class GitRef {
     }
 
     static isRefsStyle(str: string): boolean {
-        return str.startsWith('refs/heads/');
+        return str.startsWith('refs/heads/') || str.startsWith('refs/tags/') || str.startsWith('refs/remotes/');
     }
 
     static async updateCurrentRef(newRef: string) {
         const headPath = await GitDirectory.getHeadPath();
 
         if (!this.isRefsStyle(newRef)) {
-            throw new Error('Provided ref does not follow format of /refs/heads/ref-name');
+            throw new Error('Provided name is not a valid ref name');
         }
 
         return fs.writeFile(headPath, `ref: ${newRef}`, { encoding: "utf-8" });

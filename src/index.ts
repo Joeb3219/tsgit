@@ -104,6 +104,14 @@ program
     });
 
 program
+    .command("update-ref")
+    .argument('<ref>')
+    .argument('<new-value>')
+    .action(async (ref, newValue) => {
+        await GitRef.updateRef(ref, newValue)
+    })
+
+program
     .command("checkout")
     .argument("<branchname>")
     .action(async (branchName, flags) => {
