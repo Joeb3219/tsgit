@@ -1,5 +1,6 @@
 import { program } from "commander";
 import { GitObject } from "./common/GitObject";
+import { GitPack } from "./common/GitPack";
 import { GitRef } from "./common/GitRef";
 
 program
@@ -92,24 +93,26 @@ program
     .argument("<symbolic-ref-name>")
     .argument("[new-ref-name]")
     .action(async (symbolicRefName, newRefName) => {
-        if (symbolicRefName !== 'HEAD') {
-            throw new Error(`Unimplemented symbolic-ref-name ${symbolicRefName}`)
+        if (symbolicRefName !== "HEAD") {
+            throw new Error(
+                `Unimplemented symbolic-ref-name ${symbolicRefName}`
+            );
         }
 
         if (newRefName) {
             await GitRef.updateCurrentRef(newRefName);
         }
 
-        console.log(await GitRef.getCurrentRef())
+        console.log(await GitRef.getCurrentRef());
     });
 
 program
     .command("update-ref")
-    .argument('<ref>')
-    .argument('<new-value>')
+    .argument("<ref>")
+    .argument("<new-value>")
     .action(async (ref, newValue) => {
-        await GitRef.updateRef(ref, newValue)
-    })
+        await GitRef.updateRef(ref, newValue);
+    });
 
 program
     .command("checkout")
@@ -117,6 +120,18 @@ program
     .action(async (branchName, flags) => {
         const refPath = `refs/heads/${branchName}`;
         await GitRef.updateCurrentRef(refPath);
+    });
+
+program
+    .command("verify-pack")
+    .option("-v")
+    .argument("<pack-path>")
+    .action(async (packPath, flags) => {
+        const pack = await GitPack.readGitPack(
+            packPath,
+            packPath.replace(".pack", ".idx")
+        );
+        // console.log(pack);
     });
 
 program.parse();
