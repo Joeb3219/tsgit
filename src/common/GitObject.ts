@@ -31,7 +31,12 @@ export class GitObject {
         str: string | Buffer
     ): Promise<GitObjectData> {
         const decompressed = await CompressionUtil.decompress(str);
+        return this.readDecompressedObjectFromContents(decompressed);
+    }
 
+    static async readDecompressedObjectFromContents(
+        decompressed: Buffer
+    ): Promise<GitObjectData> {
         const [header, ...dataParts] = decompressed.toString().split("\0");
         const data = dataParts.join("\0");
         const [type, contentSizeString] = header.split(" ");
@@ -50,12 +55,6 @@ export class GitObject {
         }
 
         if (type === "tree") {
-            const nullPositions = StringUtil.findAllIndices(data, "\0");
-            const splits = StringUtil.splitStringAtPositions(
-                data,
-                nullPositions.map((pos) => pos + 21)
-            ).filter((f) => f.length > 2);
-
             const buffer = decompressed.subarray(
                 decompressed.indexOf("\0") + 1
             );

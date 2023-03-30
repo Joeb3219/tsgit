@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import _ from "lodash";
 import { CompressionUtil } from "./Compression.util";
+import { GitObject } from "./GitObject";
 
 type PackFile = {
     version: 2 | 3;
@@ -8,20 +9,38 @@ type PackFile = {
     entries: PackFileEntry[];
 };
 
-type PackFileEntryType =
-    | "commit"
+type PackFileEntryNormal = {
+    type: "commit"
     | "tree"
     | "blob"
-    | "tag"
-    | "ofs_delta"
-    | "ref_delta";
-
-type PackFileEntry = {
-    type: PackFileEntryType;
-    data: Buffer;
+    | "tag";
+    rawData: Buffer;
+    object: GitObject;
     size: number;
+    sizeInPack: number;
     offset: number;
+    id: string;
 };
+
+type PackFileEntryDeltafied = {
+    type: "ofs_delta"
+    | "ref_delta";
+    rawData: Buffer;
+    size: number;
+    sizeInPack: number;
+    offset: number;
+    parent: PackFileEntry;
+    depth: number;
+    rootType: "commit"
+    | "tree"
+    | "blob"
+    | "tag";
+    id: string;
+};
+
+type PackFileEntry = PackFileEntryDeltafied | PackFileEntryNormal;
+
+type PackFileEntryType = PackFileEntry['type'];
 
 export class GitPack {
     // TOOD: cleaner implementation
@@ -32,7 +51,7 @@ export class GitPack {
         let outputBuffer = Buffer.alloc(0);
 
         while (currentPosition < buffer.length - 1) {
-            const newByte = buffer.readUint8(currentPosition);
+            const newByte = buffer.readUInt8(currentPosition);
             currentPosition++;
 
             outputBuffer = Buffer.from([...outputBuffer, newByte]);
@@ -71,11 +90,13 @@ export class GitPack {
             return 0;
         }
 
-        const firstByte = buffer[0] & 0b0000_1111;
+        // Since our numbers are little-endian, we must shift all new bytes to the left of our current value
+        let shift = 4;
         return buffer.subarray(1).reduce((state, byte) => {
-            const relevantBits: number = byte & 0b0111_1111;
-            return (state << 7) | relevantBits;
-        }, firstByte);
+            const result = state | ((byte & 0b0111_1111) << shift);
+            shift += 7;
+            return result;
+        }, buffer[0] & 0b0000_1111);
     }
 
     // TODO: need to handle big big numbers (> 2^32)
@@ -162,6 +183,7 @@ export class GitPack {
     ): Promise<PackFile> {
         const buffer = await fs.readFile(packPath);
         const index = await this.readGitIndex(indexPath);
+        const idsByOffset = Object.entries(index).reduce<Record<number, string>>((state, entry) => ({ ...state, [entry[1]]: entry[0] }), {})
         const sortedOffsets = _.sortBy(Object.values(index));
 
         if (buffer.subarray(0, 4).toString() !== "PACK") {
@@ -181,8 +203,14 @@ export class GitPack {
         const entries: PackFileEntry[] = [];
         for (let i = 0; i < numEntries; i++) {
             const startingPosition: number = sortedOffsets[i] ?? 12;
+            const id = idsByOffset[startingPosition];
             const nextEntryOffset = sortedOffsets[i + 1] ?? undefined;
+            const sizeInPack = (nextEntryOffset ?? buffer.length - 40) - startingPosition;
             let currentPosition: number = startingPosition;
+
+            if (!id) {
+                throw new Error('Failed to find Object ID for PACK-file entry');
+            }
 
             const header = this.readVariableLengthBytes(
                 buffer,
@@ -209,12 +237,18 @@ export class GitPack {
                 case "tag":
                 case "tree": {
                     // Now we decompress the data
-                    const data = await CompressionUtil.decompress(
+                    const nonMutatedData = await CompressionUtil.decompress(
                         buffer.subarray(currentPosition, nextEntryOffset)
                     );
+
+                    const data = Buffer.from([...Buffer.from(`${type} ${entrySize}\0`, 'ascii'), ...nonMutatedData])
+                    const convertedObject = await GitObject.readDecompressedObjectFromContents(data);
                     entries.push({
                         type,
-                        data,
+                        rawData: nonMutatedData,
+                        object: convertedObject,
+                        id,
+                        sizeInPack,
                         size: entrySize,
                         offset: startingPosition,
                     });
@@ -369,7 +403,7 @@ export class GitPack {
 
                             resultBuffer = Buffer.from([
                                 ...resultBuffer,
-                                ...foundObject.data.subarray(
+                                ...foundObject.rawData.subarray(
                                     copyOffset,
                                     copyOffset + copySize
                                 ),
@@ -388,11 +422,18 @@ export class GitPack {
                         }
                     }
 
+                    const rootType = 'rootType' in foundObject ? foundObject.rootType : foundObject.type;
+
                     entries.push({
+                        id,
+                        sizeInPack,
+                        rootType,
                         type: "ofs_delta",
                         size: entrySize,
-                        data: resultBuffer,
+                        rawData: resultBuffer,
                         offset: startingPosition,
+                        parent: foundObject,
+                        depth: 'depth' in foundObject ? (foundObject.depth + 1) : 1,
                     });
                 }
             }

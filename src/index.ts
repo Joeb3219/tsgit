@@ -2,6 +2,7 @@ import { program } from "commander";
 import { GitObject } from "./common/GitObject";
 import { GitPack } from "./common/GitPack";
 import { GitRef } from "./common/GitRef";
+import _, { chain } from 'lodash';
 
 program
     .command("cat-file")
@@ -131,7 +132,16 @@ program
             packPath,
             packPath.replace(".pack", ".idx")
         );
-        // console.log(pack);
+
+        const entriesByChainLength = _.groupBy(pack.entries, e => 'depth' in e ? e.depth : 0);
+
+        pack.entries.forEach(entry => {
+            console.log(`${entry.id} ${'rootType' in entry ? entry.rootType : entry.type} ${entry.size} ${entry.sizeInPack} ${entry.offset} ${entry.type === 'ofs_delta' || entry.type === 'ref_delta' ? `${entry.depth} ${entry.parent.id}` : ``}`)
+        })
+        console.log(`non delta: ${pack.entries.filter(entry => entry.type !== 'ofs_delta' && entry.type !== 'ref_delta').length} objects`)
+        Object.entries(entriesByChainLength).filter(e => e[0] !== '0').forEach(([chainLength, objects]) => {
+            console.log(`chain length = ${chainLength}: ${objects.length} objects`)
+        })
     });
 
 program.parse();
