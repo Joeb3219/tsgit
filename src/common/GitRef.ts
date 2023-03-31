@@ -50,7 +50,8 @@ export class GitRef {
     static async getRef(refName: string) {
         const refPath = await GitDirectory.getRefPath(refName);
 
-        return fs.readFile(refPath, { encoding: "utf-8" });
+        const result = await fs.readFile(refPath, { encoding: "utf-8" });
+        return result.trim();
     }
 
     static async deleteRef(refName: string) {

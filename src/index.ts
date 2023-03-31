@@ -1,8 +1,11 @@
+import chalk from "chalk";
 import { program } from "commander";
+import _ from "lodash";
+import moment from "moment";
 import { GitObject } from "./common/GitObject";
 import { GitPack } from "./common/GitPack";
 import { GitRef } from "./common/GitRef";
-import _, { chain } from 'lodash';
+import { CommitWalker, GitCommit } from "./walking/CommitWalker";
 
 program
     .command("cat-file")
@@ -133,15 +136,64 @@ program
             packPath.replace(".pack", ".idx")
         );
 
-        const entriesByChainLength = _.groupBy(pack.entries, e => 'depth' in e ? e.depth : 0);
+        const entriesByChainLength = _.groupBy(pack.entries, (e) =>
+            "depth" in e ? e.depth : 0
+        );
 
-        pack.entries.forEach(entry => {
-            console.log(`${entry.id} ${'rootType' in entry ? entry.rootType : entry.type} ${entry.size} ${entry.sizeInPack} ${entry.offset} ${entry.type === 'ofs_delta' || entry.type === 'ref_delta' ? `${entry.depth} ${entry.parent.id}` : ``}`)
-        })
-        console.log(`non delta: ${pack.entries.filter(entry => entry.type !== 'ofs_delta' && entry.type !== 'ref_delta').length} objects`)
-        Object.entries(entriesByChainLength).filter(e => e[0] !== '0').forEach(([chainLength, objects]) => {
-            console.log(`chain length = ${chainLength}: ${objects.length} objects`)
-        })
+        pack.entries.forEach((entry) => {
+            console.log(
+                `${entry.id} ${
+                    "rootType" in entry ? entry.rootType : entry.type
+                } ${entry.size} ${entry.sizeInPack} ${entry.offset} ${
+                    entry.type === "ofs_delta" || entry.type === "ref_delta"
+                        ? `${entry.depth} ${entry.parent.id}`
+                        : ``
+                }`
+            );
+        });
+        console.log(
+            `non delta: ${
+                pack.entries.filter(
+                    (entry) =>
+                        entry.type !== "ofs_delta" && entry.type !== "ref_delta"
+                ).length
+            } objects`
+        );
+        Object.entries(entriesByChainLength)
+            .filter((e) => e[0] !== "0")
+            .forEach(([chainLength, objects]) => {
+                console.log(
+                    `chain length = ${chainLength}: ${objects.length} objects`
+                );
+            });
     });
+
+program.command("log").action(async () => {
+    let candidateCommits: GitCommit[] = [
+        await CommitWalker.findCurrentCommitAndAncestors(),
+    ];
+    while (candidateCommits.length) {
+        const commit = _.maxBy(candidateCommits, (c) => c.author.date);
+        candidateCommits = candidateCommits.filter((c) => c.id !== commit?.id);
+
+        // Should never happen
+        if (!commit) {
+            return;
+        }
+
+        console.log(chalk.yellow(`commit ${commit.id}`));
+        console.log(chalk.white(`Author: ${commit.author.nameAndEmail}`));
+        console.log(
+            chalk.white(
+                `Date: ${moment(commit.author.date)
+                    .utcOffset(commit.author.timezone)
+                    .toLocaleString()}`
+            )
+        );
+        console.log(chalk.white(`\n\t${commit.commitMsg}\n`));
+
+        candidateCommits.push(...commit.parents);
+    }
+});
 
 program.parse();

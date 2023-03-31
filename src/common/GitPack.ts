@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import _ from "lodash";
 import { CompressionUtil } from "./Compression.util";
-import { GitObject } from "./GitObject";
+import { GitObject, GitObjectData } from "./GitObject";
 
 type PackFile = {
     version: 2 | 3;
@@ -10,12 +10,9 @@ type PackFile = {
 };
 
 type PackFileEntryNormal = {
-    type: "commit"
-    | "tree"
-    | "blob"
-    | "tag";
+    type: "commit" | "tree" | "blob" | "tag";
     rawData: Buffer;
-    object: GitObject;
+    object: GitObjectData;
     size: number;
     sizeInPack: number;
     offset: number;
@@ -23,24 +20,20 @@ type PackFileEntryNormal = {
 };
 
 type PackFileEntryDeltafied = {
-    type: "ofs_delta"
-    | "ref_delta";
+    type: "ofs_delta" | "ref_delta";
     rawData: Buffer;
     size: number;
     sizeInPack: number;
     offset: number;
     parent: PackFileEntry;
     depth: number;
-    rootType: "commit"
-    | "tree"
-    | "blob"
-    | "tag";
+    rootType: "commit" | "tree" | "blob" | "tag";
     id: string;
 };
 
-type PackFileEntry = PackFileEntryDeltafied | PackFileEntryNormal;
+export type PackFileEntry = PackFileEntryDeltafied | PackFileEntryNormal;
 
-type PackFileEntryType = PackFileEntry['type'];
+type PackFileEntryType = PackFileEntry["type"];
 
 export class GitPack {
     // TOOD: cleaner implementation
@@ -183,7 +176,9 @@ export class GitPack {
     ): Promise<PackFile> {
         const buffer = await fs.readFile(packPath);
         const index = await this.readGitIndex(indexPath);
-        const idsByOffset = Object.entries(index).reduce<Record<number, string>>((state, entry) => ({ ...state, [entry[1]]: entry[0] }), {})
+        const idsByOffset = Object.entries(index).reduce<
+            Record<number, string>
+        >((state, entry) => ({ ...state, [entry[1]]: entry[0] }), {});
         const sortedOffsets = _.sortBy(Object.values(index));
 
         if (buffer.subarray(0, 4).toString() !== "PACK") {
@@ -205,11 +200,12 @@ export class GitPack {
             const startingPosition: number = sortedOffsets[i] ?? 12;
             const id = idsByOffset[startingPosition];
             const nextEntryOffset = sortedOffsets[i + 1] ?? undefined;
-            const sizeInPack = (nextEntryOffset ?? buffer.length - 40) - startingPosition;
+            const sizeInPack =
+                (nextEntryOffset ?? buffer.length - 40) - startingPosition;
             let currentPosition: number = startingPosition;
 
             if (!id) {
-                throw new Error('Failed to find Object ID for PACK-file entry');
+                throw new Error("Failed to find Object ID for PACK-file entry");
             }
 
             const header = this.readVariableLengthBytes(
@@ -241,8 +237,14 @@ export class GitPack {
                         buffer.subarray(currentPosition, nextEntryOffset)
                     );
 
-                    const data = Buffer.from([...Buffer.from(`${type} ${entrySize}\0`, 'ascii'), ...nonMutatedData])
-                    const convertedObject = await GitObject.readDecompressedObjectFromContents(data);
+                    const data = Buffer.from([
+                        ...Buffer.from(`${type} ${entrySize}\0`, "ascii"),
+                        ...nonMutatedData,
+                    ]);
+                    const convertedObject =
+                        await GitObject.readDecompressedObjectFromContents(
+                            data
+                        );
                     entries.push({
                         type,
                         rawData: nonMutatedData,
@@ -422,7 +424,10 @@ export class GitPack {
                         }
                     }
 
-                    const rootType = 'rootType' in foundObject ? foundObject.rootType : foundObject.type;
+                    const rootType =
+                        "rootType" in foundObject
+                            ? foundObject.rootType
+                            : foundObject.type;
 
                     entries.push({
                         id,
@@ -433,7 +438,8 @@ export class GitPack {
                         rawData: resultBuffer,
                         offset: startingPosition,
                         parent: foundObject,
-                        depth: 'depth' in foundObject ? (foundObject.depth + 1) : 1,
+                        depth:
+                            "depth" in foundObject ? foundObject.depth + 1 : 1,
                     });
                 }
             }

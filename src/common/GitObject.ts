@@ -3,7 +3,6 @@ import path from "path";
 import { CompressionUtil } from "./Compression.util";
 import { GitDirectory } from "./GitDirectory";
 import { HashUtil } from "./Hash.util";
-import { StringUtil } from "./String.util";
 
 type TreeData = {
     mode: number;

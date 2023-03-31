@@ -1,4 +1,5 @@
 import findUp from "find-up";
+import fs from "fs-extra";
 import path from "path";
 
 export class GitDirectory {
@@ -13,6 +14,18 @@ export class GitDirectory {
         }
 
         return result;
+    }
+
+    static async getPackFileNames() {
+        const directory = path.join(
+            await this.getGitDirectoryRoot(),
+            "objects",
+            "pack"
+        );
+        const directoryPaths = await fs.readdir(directory);
+        return directoryPaths
+            .filter((p) => p.toLowerCase().endsWith(".pack"))
+            .map((stub) => path.join(directory, stub));
     }
 
     static async getObjectPath(hash: string): Promise<string> {
