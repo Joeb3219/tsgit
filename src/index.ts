@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { program } from "commander";
 import _ from "lodash";
 import moment from "moment";
+import { GitIndex } from "./common/GitIndex";
 import { GitObject } from "./common/GitObject";
 import { GitPack } from "./common/GitPack";
 import { GitRef } from "./common/GitRef";
@@ -237,5 +238,17 @@ program
         const currentTree = await CommitWalker.getCurrentTree();
         await CommitWalker.restoreTree(currentTree);
     });
+
+program
+    .command("add")
+    .argument("<path>")
+    .action(async (path) => {
+        await GitIndex.stageFile(path);
+    });
+
+program.command("index").action(async () => {
+    const result = await GitIndex.readIndex();
+    console.log(result);
+});
 
 program.parse();

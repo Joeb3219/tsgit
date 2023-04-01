@@ -196,12 +196,17 @@ export class GitObject {
     static async writeObject(object: GitObjectData) {
         const objectPath = await GitDirectory.getObjectPath(object.hash);
 
+        // TODO: this should not be possible
+        if (await fs.exists(objectPath)) {
+            await fs.remove(objectPath);
+        }
+
         const directory = path.dirname(objectPath);
         await fs.mkdirp(directory);
 
         const payload = this.getObjectPayload(object);
         const compressedPayload = await CompressionUtil.compress(payload);
 
-        return fs.writeFile(objectPath, compressedPayload);
+        return fs.writeFile(objectPath, compressedPayload, { mode: 444 });
     }
 }

@@ -18,6 +18,13 @@ export class GitDirectory {
         return result;
     }
 
+    static async getProjectRelativePath(pth: string): Promise<string> {
+        const rootDir = await this.getGitDirectoryRoot();
+        const parent = path.join(rootDir, "..");
+
+        return pth.replace(`${parent}${path.delimiter}`, "");
+    }
+
     static async findAllFiles(basePath: string): Promise<string[]> {
         const directoryPaths = await fs.readdir(basePath);
         const results: string[] = [];
@@ -34,6 +41,11 @@ export class GitDirectory {
         }
 
         return results;
+    }
+
+    static async getIndexPath(): Promise<string> {
+        const baseDir = await this.getGitDirectoryRoot();
+        return path.join(baseDir, "index");
     }
 
     static async findAllRefs(variants: RefVariant[]): Promise<string[]> {
