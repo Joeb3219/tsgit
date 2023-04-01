@@ -172,6 +172,8 @@ program.command("log").action(async () => {
     let candidateCommits: GitCommit[] = [
         await CommitWalker.findCurrentCommitAndAncestors(),
     ];
+    const branchRefs = await GitRef.getAllBranchRefs(true);
+    const headRef = await GitRef.getCurrentRef();
     while (candidateCommits.length) {
         const commit = _.maxBy(candidateCommits, (c) => c.author.date);
         candidateCommits = candidateCommits.filter((c) => c.id !== commit?.id);
@@ -181,16 +183,43 @@ program.command("log").action(async () => {
             return;
         }
 
-        console.log(chalk.yellow(`commit ${commit.id}`));
-        console.log(chalk.white(`Author: ${commit.author.nameAndEmail}`));
+        const commitBranchHeads = Object.entries(branchRefs).filter(
+            (b) => b[1] === commit.id
+        );
+        const branchString = commitBranchHeads
+            .map((h) => {
+                const refName = h[0];
+                const branchName = GitRef.refToBranchName(refName);
+                const isHead = refName === headRef;
+
+                if (isHead) {
+                    return `${chalk.blueBright("HEAD ->")} ${chalk.greenBright(
+                        branchName
+                    )}`;
+                }
+
+                if (refName.startsWith("refs/remotes")) {
+                    return `${chalk.redBright(branchName)}`;
+                }
+
+                return `${chalk.greenBright(branchName)}`;
+            })
+            .join(", ");
+
         console.log(
-            chalk.white(
+            chalk.yellowBright(
+                `commit ${commit.id} ${branchString ? `(${branchString})` : ""}`
+            )
+        );
+        console.log(chalk.whiteBright(`Author: ${commit.author.nameAndEmail}`));
+        console.log(
+            chalk.whiteBright(
                 `Date: ${moment(commit.author.date)
                     .utcOffset(commit.author.timezone)
                     .toLocaleString()}`
             )
         );
-        console.log(chalk.white(`\n\t${commit.commitMsg}\n`));
+        console.log(chalk.whiteBright(`\n\t${commit.commitMsg}\n`));
 
         candidateCommits.push(...commit.parents);
     }

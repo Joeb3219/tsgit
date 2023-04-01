@@ -2,6 +2,8 @@ import findUp from "find-up";
 import fs from "fs-extra";
 import path from "path";
 
+type RefVariant = "heads" | "remotes" | "tags";
+
 export class GitDirectory {
     // TODO: actually compute this correctly
     static async getGitDirectoryRoot(): Promise<string> {
@@ -14,6 +16,41 @@ export class GitDirectory {
         }
 
         return result;
+    }
+
+    static async findAllFiles(basePath: string): Promise<string[]> {
+        const directoryPaths = await fs.readdir(basePath);
+        const results: string[] = [];
+        for (const stub of directoryPaths) {
+            const entry = path.join(basePath, stub);
+            const stat = await fs.stat(entry);
+
+            if (stat.isDirectory()) {
+                const subResults = await this.findAllFiles(entry);
+                results.push(...subResults);
+            } else {
+                results.push(entry);
+            }
+        }
+
+        return results;
+    }
+
+    static async findAllRefs(variants: RefVariant[]): Promise<string[]> {
+        const gitRoot = await this.getGitDirectoryRoot();
+        const basePath = path.join(gitRoot, "refs");
+        const results: string[] = [];
+
+        for (const variant of variants) {
+            const filePaths = await this.findAllFiles(
+                path.join(basePath, variant)
+            );
+            results.push(
+                ...filePaths.map((p) => p.replace(gitRoot, "").substring(1))
+            );
+        }
+
+        return results;
     }
 
     static async getPackFileNames() {
