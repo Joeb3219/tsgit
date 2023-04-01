@@ -225,4 +225,17 @@ program.command("log").action(async () => {
     }
 });
 
+program
+    .command("reset")
+    .option("--hard")
+    .action(async (flags) => {
+        // TODO: other resets
+        if (!flags.hard) {
+            return;
+        }
+
+        const currentTree = await CommitWalker.getCurrentTree();
+        await CommitWalker.restoreTree(currentTree);
+    });
+
 program.parse();

@@ -83,7 +83,6 @@ export class CommitWalker {
 
     static objectToCommit(object: GitObjectData): GitCommitRaw {
         if (object.type !== "commit") {
-            0;
             throw new Error(
                 `Attempting to convert object to commit when given a non-commit`
             );
@@ -131,5 +130,32 @@ export class CommitWalker {
                 )
             ),
         };
+    }
+
+    static async restoreTree(tree: GitObjectData) {
+        if (tree.type !== "tree") {
+            throw new Error(`Attempting to restore tree with non-tree object`);
+        }
+
+        for (const node of tree.data) {
+            const childObject = await this.findObject(node.hash);
+
+            if (childObject.type === "tree") {
+                this.restoreTree(childObject);
+                return;
+            }
+
+            // TODO: set the file mode
+            await fs.writeFile(node.path, childObject.data);
+        }
+    }
+
+    static async getCurrentTree() {
+        const currentBranch = await GitRef.getCurrentRef();
+        const currentCommitId = await GitRef.getRef(currentBranch);
+        const commitObject = await this.findObject(currentCommitId);
+        const currentCommit = this.objectToCommit(commitObject);
+
+        return this.findObject(currentCommit.tree);
     }
 }
