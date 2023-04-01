@@ -229,14 +229,19 @@ program.command("log").action(async () => {
 program
     .command("reset")
     .option("--hard")
-    .action(async (flags) => {
-        // TODO: other resets
-        if (!flags.hard) {
+    .option("--mixed")
+    .argument("[path]")
+    .action(async (path, flags) => {
+        const currentTree = await CommitWalker.getCurrentTree();
+
+        if (flags.hard) {
+            await CommitWalker.restoreTree(currentTree);
             return;
         }
 
-        const currentTree = await CommitWalker.getCurrentTree();
-        await CommitWalker.restoreTree(currentTree);
+        // Default: reset from index but don't full restore the tree
+        // TODO: support globs
+        await GitIndex.resetIndexToTree(currentTree, path ? [path] : undefined);
     });
 
 program

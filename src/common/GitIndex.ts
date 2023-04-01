@@ -1,4 +1,6 @@
 import fs from "fs-extra";
+import _ from "lodash";
+import { CommitWalker } from "../walking/CommitWalker";
 import { GitDirectory } from "./GitDirectory";
 import { GitObject, GitObjectData } from "./GitObject";
 import { HashUtil } from "./Hash.util";
@@ -29,7 +31,7 @@ export class GitIndex {
             fileName
         );
 
-        // Write the object
+        // Write the object if a new object was created
         await GitObject.writeObject(objectData);
 
         // And now we rewrite the index
@@ -38,6 +40,37 @@ export class GitIndex {
             (idx) => idx.path !== indexRow.path
         );
         await this.writeIndex([...oldIndexRowsWithoutThisObject, indexRow]);
+    }
+
+    // TOOD: clean clean clean clean
+    static async readModifiedFileAndGenerateOriginalIndexDataRow(
+        fileName: string,
+        object: GitObjectData
+    ): Promise<GitIndexDataRow> {
+        const stat = await fs.stat(fileName);
+        const relativePath = await GitDirectory.getProjectRelativePath(
+            fileName
+        );
+
+        return {
+            device: stat.dev,
+            fileSize: object.size,
+            inodeNumber: 0,
+            groupIdentifier: 0,
+            userIdentifier: 0,
+            dataChangedAt: {
+                seconds: 0,
+                nanosecondFraction: 0,
+            },
+            metadataChangedAt: {
+                seconds: 0,
+                nanosecondFraction: 0,
+            },
+            mode: stat.mode,
+            path: relativePath,
+            id: object.hash,
+            flags: relativePath.length > 0xfff ? 0xfff : relativePath.length,
+        };
     }
 
     // TOOD: clean clean clean clean
@@ -95,8 +128,9 @@ export class GitIndex {
 
         // TODO: make this not awful
         let body = Buffer.alloc(0);
-        for (let i = 0; i < rows.length; i++) {
-            const entry = rows[i];
+        const sortedRows = _.sortBy(rows, (r) => r.path);
+        for (let i = 0; i < sortedRows.length; i++) {
+            const entry = sortedRows[i];
             const baseSize = 62 + entry.path.length + 1;
             const entryBuffer = Buffer.alloc(Math.ceil((baseSize + 1) / 8) * 8);
             entryBuffer.writeUInt32BE(entry.metadataChangedAt.seconds, 0);
@@ -236,6 +270,70 @@ export class GitIndex {
             throw new Error(
                 `Expected index file to have checksum ${expectedChecksum} but had ${realChecksum}`
             );
+        }
+
+        return rows;
+    }
+
+    static async resetIndexToTree(
+        tree: GitObjectData,
+        specificFiles?: string[]
+    ) {
+        if (tree.type !== "tree") {
+            throw new Error(
+                "Attempting to reset index but provided a non-tree object"
+            );
+        }
+
+        const indexRows = await this.readIndex();
+        const regeneratedRows = await this.generateIndexRowsFromTree(
+            tree,
+            specificFiles
+        );
+        const newRows = [
+            ...indexRows.filter(
+                (r) => !regeneratedRows.some((o) => o.path === r.path)
+            ),
+            ...regeneratedRows,
+        ];
+
+        await this.writeIndex(newRows);
+    }
+
+    static async generateIndexRowsFromTree(
+        tree: GitObjectData,
+        specificFiles?: string[]
+    ): Promise<GitIndexDataRow[]> {
+        if (tree.type !== "tree") {
+            throw new Error(`Attempting to restore tree with non-tree object`);
+        }
+
+        const rows: GitIndexDataRow[] = [];
+
+        for (const node of tree.data) {
+            const childObject = await CommitWalker.findObject(node.hash);
+
+            if (childObject.type === "tree") {
+                const subResults = await this.generateIndexRowsFromTree(
+                    childObject,
+                    specificFiles
+                );
+                rows.push(...subResults);
+                continue;
+            }
+
+            // Ensure this node is one of what we are attempting to generate
+            // TODO: optimize walking based on this subset
+            if (specificFiles && !specificFiles.includes(node.path)) {
+                continue;
+            }
+
+            const row =
+                await this.readModifiedFileAndGenerateOriginalIndexDataRow(
+                    node.path,
+                    childObject
+                );
+            rows.push(row);
         }
 
         return rows;
