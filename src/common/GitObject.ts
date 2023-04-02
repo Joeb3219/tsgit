@@ -4,7 +4,7 @@ import { CompressionUtil } from "./Compression.util";
 import { GitDirectory } from "./GitDirectory";
 import { HashUtil } from "./Hash.util";
 
-type TreeData = {
+export type TreeData = {
     mode: number;
     hash: string;
     path: string;

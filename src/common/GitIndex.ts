@@ -5,7 +5,7 @@ import { GitDirectory } from "./GitDirectory";
 import { GitObject, GitObjectData } from "./GitObject";
 import { HashUtil } from "./Hash.util";
 
-type IndexTimeStamp = {
+export type IndexTimeStamp = {
     seconds: number;
     nanosecondFraction: number;
 };
@@ -337,5 +337,23 @@ export class GitIndex {
         }
 
         return rows;
+    }
+
+    static isTimeStampGreaterThanEqual(
+        a: IndexTimeStamp,
+        b: IndexTimeStamp
+    ): boolean {
+        // more seconds implies a is bigger regardless of nanoseconds
+        if (a.seconds > b.seconds) {
+            return true;
+        }
+
+        // less seconds implies b is bigger regardless of nanoseconds
+        if (b.seconds > a.seconds) {
+            return false;
+        }
+
+        // TODO: handle nanoseconds correctly
+        return false;
     }
 }

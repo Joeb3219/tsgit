@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { program } from "commander";
 import _ from "lodash";
 import moment from "moment";
+import { GitDirectory } from "./common/GitDirectory";
 import { GitIndex } from "./common/GitIndex";
 import { GitObject } from "./common/GitObject";
 import { GitPack } from "./common/GitPack";
@@ -254,6 +255,120 @@ program
 program.command("index").action(async () => {
     const result = await GitIndex.readIndex();
     console.log(result);
+});
+
+program.command("status").action(async () => {
+    const index = await GitIndex.readIndex();
+    const currentTree = await CommitWalker.getCurrentTree();
+    const flattenedTree = await CommitWalker.flattenTree(currentTree);
+    const flattedTreeByPath = _.keyBy(flattenedTree, (t) => t.path);
+    const currentRef = await GitRef.getCurrentRef();
+    const currentBranchName = GitRef.refToBranchName(currentRef);
+    const indexByPath = _.keyBy(index, (i) => i.path);
+
+    const stagedFiles = index.filter((row) => {
+        const matchedTreeNode = flattedTreeByPath[row.path];
+
+        if (!matchedTreeNode) {
+            return true;
+        }
+
+        // If the IDs match, the contents of the files are the same.
+        return matchedTreeNode.hash !== row.id;
+    });
+
+    const workingDirectory = await GitDirectory.walkDirectory();
+    const workingDirectoryByPath = _.keyBy(workingDirectory, (w) => w.path);
+    const untrackedFiles = workingDirectory.filter((untracked) => {
+        const indexEntry = indexByPath[untracked.path];
+
+        // If it's in the index, we clearly have tracked it
+        return !indexEntry;
+    });
+
+    const allIndexAndWorkingPaths = _.uniq([
+        ...index.map((i) => i.path),
+        ...workingDirectory.map((w) => w.path),
+    ]);
+    const changesNotStagedFiles = _.compact(
+        allIndexAndWorkingPaths.map<[string, "deleted" | "modified"] | null>(
+            (path) => {
+                const wdEntry = workingDirectoryByPath[path];
+                const indexEntry = indexByPath[path];
+
+                // It's in the index, but no longer is in the working directory
+                // Thus, it's been deleted
+                if (!wdEntry && !!indexEntry) {
+                    return [path, "deleted"];
+                }
+
+                // If it's in WD but not entry, it's untracked -- this doesn't count as not staged.
+                if (!!wdEntry && !indexEntry) {
+                    return null;
+                }
+
+                // We are modified if either the metadata or data of the working directory is more recent than the index entry.
+                if (
+                    GitIndex.isTimeStampGreaterThanEqual(
+                        wdEntry.metadataChangedAt,
+                        indexEntry.metadataChangedAt
+                    ) ||
+                    GitIndex.isTimeStampGreaterThanEqual(
+                        wdEntry.dataChangedAt,
+                        indexEntry.metadataChangedAt
+                    )
+                ) {
+                    return [path, "modified"];
+                }
+
+                return null;
+            }
+        )
+    );
+
+    console.log(`On branch ${currentBranchName}`);
+    if (stagedFiles.length) {
+        console.log(`Changes to be committed:`);
+        console.log(`    (use "git restore --staged <file>..." to unstage)`);
+        stagedFiles.forEach((file) => {
+            console.log(
+                chalk.greenBright(
+                    `\t${
+                        !!flattedTreeByPath[file.path] ? "modified" : "new file"
+                    }:  ${file.path}`
+                )
+            );
+        });
+    }
+
+    if (changesNotStagedFiles.length) {
+        console.log(`Changes not staged for commit:`);
+        console.log(
+            `    (use "git add/rm <file>..." to update what will be committed)`
+        );
+        console.log(
+            `    (use "git restore <file>..." to discard changes in working directory)`
+        );
+        changesNotStagedFiles.forEach((file) => {
+            console.log(chalk.redBright(`\t${file[1]}:  ${file[0]}`));
+        });
+    }
+
+    if (untrackedFiles.length) {
+        console.log(`Untracked files:`);
+        console.log(
+            `    (use "git add <file>..." to include in what will be committed)`
+        );
+        untrackedFiles.forEach((file) => {
+            console.log(chalk.redBright(`\t${file.path}`));
+        });
+    }
+
+    if (stagedFiles.length === 0) {
+        console.log(
+            `no changes added to commit (use "git add" and/or "git commit -a")`
+        );
+    }
 });
 
 program.parse();

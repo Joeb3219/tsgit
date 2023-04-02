@@ -1,8 +1,16 @@
 import findUp from "find-up";
 import fs from "fs-extra";
+import globby from "globby";
 import path from "path";
+import { IndexTimeStamp } from "./GitIndex";
 
 type RefVariant = "heads" | "remotes" | "tags";
+
+type WorkingDirectoryEntry = {
+    path: string;
+    metadataChangedAt: IndexTimeStamp;
+    dataChangedAt: IndexTimeStamp;
+};
 
 export class GitDirectory {
     // TODO: actually compute this correctly
@@ -95,5 +103,61 @@ export class GitDirectory {
         const rootDirectory = await this.getGitDirectoryRoot();
 
         return `${rootDirectory}/HEAD`;
+    }
+
+    static async getGitIgnore(): Promise<string[]> {
+        const gitIgnore = await this.getProjectRelativePath(".gitignore");
+        const ignoreExists = await fs.exists(gitIgnore);
+
+        if (!ignoreExists) {
+            return [];
+        }
+
+        const file = await fs.readFile(gitIgnore, "utf-8");
+        return file
+            .split("\n")
+            .map((l) => l.trim())
+            .filter((t) => !!t.length);
+    }
+
+    static async walkDirectory(): Promise<WorkingDirectoryEntry[]> {
+        const ignoreGlobs = await this.getGitIgnore();
+        const filePaths = await globby(
+            ["**/**", ".gitignore", ...ignoreGlobs.map((g) => `!${g}`)],
+            {
+                expandDirectories: true,
+                ignore: [".git", ".git/*"],
+                objectMode: true,
+                stats: true,
+            }
+        );
+
+        return Promise.all(
+            filePaths.map<Promise<WorkingDirectoryEntry>>(async (entry) => {
+                if (!entry.stats) {
+                    throw new Error("Failed to stat file");
+                }
+
+                return {
+                    path: entry.path,
+                    dataChangedAt: {
+                        seconds: Math.floor(entry.stats.mtimeMs / 1000),
+                        nanosecondFraction: Math.floor(
+                            (entry.stats.mtimeMs -
+                                Math.floor(entry.stats.mtimeMs / 1000) * 1000) *
+                                1000000
+                        ),
+                    },
+                    metadataChangedAt: {
+                        seconds: Math.floor(entry.stats.ctimeMs / 1000),
+                        nanosecondFraction: Math.floor(
+                            (entry.stats.ctimeMs -
+                                Math.floor(entry.stats.ctimeMs / 1000) * 1000) *
+                                1000000
+                        ),
+                    },
+                };
+            })
+        );
     }
 }

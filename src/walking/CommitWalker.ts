@@ -1,6 +1,6 @@
 import fs from "fs-extra";
 import { GitDirectory } from "../common/GitDirectory";
-import { GitObject, GitObjectData } from "../common/GitObject";
+import { GitObject, GitObjectData, TreeData } from "../common/GitObject";
 import { GitPack } from "../common/GitPack";
 import { GitRef } from "../common/GitRef";
 
@@ -157,5 +157,26 @@ export class CommitWalker {
         const currentCommit = this.objectToCommit(commitObject);
 
         return this.findObject(currentCommit.tree);
+    }
+
+    static async flattenTree(tree: GitObjectData): Promise<TreeData[]> {
+        const rows: TreeData[] = [];
+
+        if (tree.type !== "tree") {
+            throw new Error(
+                `Attempting to flatten a tree when given non-tree object`
+            );
+        }
+
+        for (const node of tree.data) {
+            rows.push(node);
+            if (node.type === "tree") {
+                const object = await this.findObject(node.hash);
+                const subNodes = await this.flattenTree(object);
+                rows.push(...subNodes);
+            }
+        }
+
+        return rows;
     }
 }
