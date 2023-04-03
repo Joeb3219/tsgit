@@ -1,4 +1,5 @@
 import fs from "fs-extra";
+import _ from "lodash";
 import path from "path";
 import { CompressionUtil } from "./Compression.util";
 import { GitDirectory } from "./GitDirectory";
@@ -31,6 +32,42 @@ export class GitObject {
     ): Promise<GitObjectData> {
         const decompressed = await CompressionUtil.decompress(str);
         return this.readDecompressedObjectFromContents(decompressed);
+    }
+
+    static treeObjectToCompressedBuffer(
+        object: GitObjectData
+    ): [Buffer, number] {
+        if (object.type !== "tree") {
+            throw new Error(
+                `Attempted to convert tree-object to buffer but given non-tree object`
+            );
+        }
+
+        // TODO: stop having two very similar implementations of this
+        const sortedData = _.sortBy(object.data, (datum) => datum.path);
+        const treeDataBuffer = sortedData.reduce<Buffer>((state, datum) => {
+            const newRow = Buffer.from([
+                ...Buffer.from(
+                    `${
+                        datum.type === "commit"
+                            ? "160000"
+                            : datum.type === "tree"
+                            ? "040000"
+                            : "100644"
+                    } ${datum.path}\0`,
+                    "utf-8"
+                ),
+                ...Buffer.from(datum.hash, "hex"),
+            ]);
+            return Buffer.from([...state, ...newRow]);
+        }, Buffer.alloc(0));
+
+        const headerString = `tree ${treeDataBuffer.length}\0`;
+
+        return [
+            Buffer.from([...Buffer.from(headerString), ...treeDataBuffer]),
+            treeDataBuffer.length,
+        ];
     }
 
     static async readDecompressedObjectFromContents(
@@ -159,21 +196,29 @@ export class GitObject {
         const header = `${object.type} ${object.size}\0`;
         if (object.type === "tree") {
             const treeData = Buffer.alloc(object.size);
-            treeData.write(header, 0);
 
-            let currentPosition: number = header.length;
-            for (const datum of object.data) {
-                const modeAndPath = `${datum.mode} ${datum.path}\0`;
-                treeData.write(modeAndPath, currentPosition);
-                currentPosition += modeAndPath.length;
-
-                const hashBuffer = Buffer.from(datum.hash, "hex");
-                hashBuffer.copy(treeData, currentPosition);
-
-                currentPosition += hashBuffer.length;
+            // TODO: stop having two very similar implementations of this
+            let currentPosition: number = 0;
+            const sortedData = _.sortBy(object.data, (datum) => datum.path);
+            for (const datum of sortedData) {
+                const newRow = Buffer.from([
+                    ...Buffer.from(
+                        `${
+                            datum.type === "commit"
+                                ? "160000"
+                                : datum.type === "tree"
+                                ? "040000"
+                                : "100644"
+                        } ${datum.path}\0`,
+                        "utf-8"
+                    ),
+                    ...Buffer.from(datum.hash, "hex"),
+                ]);
+                newRow.copy(treeData, currentPosition);
+                currentPosition += newRow.length;
             }
 
-            return treeData;
+            return Buffer.from([...Buffer.from(header), ...treeData]);
         }
 
         return `${header}${object.data}`;

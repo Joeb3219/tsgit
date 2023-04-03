@@ -13,7 +13,12 @@ export class GitRef {
 
         await fs.mkdirp(baseDirectory);
 
-        return fs.writeFile(refPath, refValue, { encoding: "utf-8" });
+        console.log(
+            `writing ${refValue.trim()} (${refValue.length}) to ${refPath}`
+        );
+        return fs.writeFile(refPath, `${refValue.trim()}\n`, {
+            encoding: "utf-8",
+        });
     }
 
     static async getCurrentRef(): Promise<string> {
@@ -44,7 +49,9 @@ export class GitRef {
             throw new Error("Provided name is not a valid ref name");
         }
 
-        return fs.writeFile(headPath, `ref: ${newRef}`, { encoding: "utf-8" });
+        return fs.writeFile(headPath, `ref: ${newRef.trim()}`, {
+            encoding: "utf-8",
+        });
     }
 
     static async getRef(refName: string) {

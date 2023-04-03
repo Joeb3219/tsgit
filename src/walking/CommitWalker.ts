@@ -10,7 +10,7 @@ type GitAuthor = {
     timezone: string;
 };
 
-type GitCommitRaw = {
+export type GitCommitRaw = {
     id: string;
     author: GitAuthor;
     committer: GitAuthor;

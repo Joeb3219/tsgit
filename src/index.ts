@@ -2,6 +2,7 @@ import chalk from "chalk";
 import { program } from "commander";
 import _ from "lodash";
 import moment from "moment";
+import { GitCommitBuilder } from "./common/GitCommitBuilder";
 import { GitDirectory } from "./common/GitDirectory";
 import { GitIndex } from "./common/GitIndex";
 import { GitObject } from "./common/GitObject";
@@ -370,5 +371,14 @@ program.command("status").action(async () => {
         );
     }
 });
+
+program
+    .command("commit")
+    .option("-m <message>")
+    .action(async (flags) => {
+        const result = await GitCommitBuilder.createCommitFromStagingArea(
+            flags.m
+        );
+    });
 
 program.parse();
